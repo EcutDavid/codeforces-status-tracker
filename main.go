@@ -6,14 +6,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 )
 
+// https://codeforces.com/api/help/methods#user.status
 type UserStatusResponse struct {
 	Status string
 	Result []*Submission
 }
+
+// https://codeforces.com/api/help/objects#Submission
 type Submission struct {
 	Id, ContestId, CreationTimeSeconds, RelativeTimeSeconds int64
 	Problem                                                 *Problem
@@ -24,6 +26,7 @@ type Submission struct {
 	TimeConsumedMillis, memoryConsumedBytes                 int
 }
 
+// https://codeforces.com/api/help/objects#Problem
 type Problem struct {
 	ContestId int
 	Index     string
@@ -32,23 +35,22 @@ type Problem struct {
 	Tags      []string
 }
 
+// TODO: handle pagination
 func fetchSubmissions(handle string) *UserStatusResponse {
-	// TODO: handle pagination
 	url := fmt.Sprintf("https://codeforces.com/api/user.status?handle=%s&from=1&count=1000&lang=en", handle)
-	// TODO: encode handle/ also, what's the legal handler?
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
-	var cfResp UserStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&cfResp); err != nil {
+	cfResp := &(UserStatusResponse{})
+	if err := json.NewDecoder(resp.Body).Decode(cfResp); err != nil {
 		log.Fatal(err)
 	}
 	if cfResp.Status != "OK" {
 		log.Fatal("codeforces user.status API responded:", cfResp.Status)
 	}
-	return &cfResp
+	return cfResp
 }
 
 func validateHandle(h string) bool {
@@ -68,21 +70,20 @@ func main() {
 
 	solvedProblems, lines := map[string]bool{}, []string{}
 	for _, v := range res.Result {
-		id := strconv.Itoa(v.Problem.ContestId) + "/" + v.Problem.Index
+		id := fmt.Sprintf("%d/%s", v.Problem.ContestId, v.Problem.Index)
 		if v.Verdict != "OK" || solvedProblems[id] {
 			continue
 		}
 
 		y, m, d := time.Unix(v.CreationTimeSeconds, 0).Date()
-
 		date := fmt.Sprintf("%d-%02d-%02d", y, m, d)
+		lines = append(lines, fmt.Sprintf("%-9s%-50s%-12s", id, v.Problem.Name, date))
 
-		line := fmt.Sprintf("%-9s%-50s%12s", id, v.Problem.Name, date)
-		lines = append(lines, line)
 		solvedProblems[id] = true
 	}
-	fmt.Printf("%s solved %d problems\n", handle, len(solvedProblems))
-	fmt.Printf("%-9s%-50s%12s\n", "ID", "Name", "date")
+
+	fmt.Printf("%s solved %d problems.\n", handle, len(solvedProblems))
+	fmt.Printf("%-9s%-50s%-12s\n", "ID", "Name", "Date")
 	for _, l := range lines {
 		fmt.Println(l)
 	}
