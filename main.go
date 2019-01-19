@@ -1,4 +1,4 @@
-package main
+package codeforcesreport
 
 import (
 	"encoding/json"
@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 )
 
 // https://codeforces.com/api/help/methods#user.status
@@ -36,7 +35,11 @@ type Problem struct {
 }
 
 // TODO: handle pagination
-func fetchSubmissions(handle string) *UserStatusResponse {
+func FetchSubmissions(handle string) *UserStatusResponse {
+	if !validateHandle(handle) {
+		log.Fatal(fmt.Sprintf("Something wrong with the user handle %s, please take a look :)", os.Args[1]))
+	}
+
 	url := fmt.Sprintf("https://codeforces.com/api/user.status?handle=%s&from=1&count=1000&lang=en", handle)
 	resp, err := http.Get(url)
 	if err != nil {
@@ -53,38 +56,20 @@ func fetchSubmissions(handle string) *UserStatusResponse {
 	return cfResp
 }
 
-func validateHandle(h string) bool {
-	// TODO
-	return true
-}
-
-func main() {
-	if len(os.Args) == 1 {
-		log.Fatal("Please tell me the user handle :)")
-	}
-	handle := os.Args[1]
-	if !validateHandle(handle) {
-		log.Fatal(fmt.Sprintf("Something wrong with the user handle %s, please take a look :)", os.Args[1]))
-	}
-	res := fetchSubmissions(handle)
-
-	solvedProblems, lines := map[string]bool{}, []string{}
-	for _, v := range res.Result {
+func ParseUniqOkSubmissions(u *UserStatusResponse) []*Submission {
+	solved, result := map[string]bool{}, []*Submission{}
+	for _, v := range u.Result {
 		id := fmt.Sprintf("%d/%s", v.Problem.ContestId, v.Problem.Index)
-		if v.Verdict != "OK" || solvedProblems[id] {
+		if v.Verdict != "OK" || solved[id] {
 			continue
 		}
 
-		y, m, d := time.Unix(v.CreationTimeSeconds, 0).Date()
-		date := fmt.Sprintf("%d-%02d-%02d", y, m, d)
-		lines = append(lines, fmt.Sprintf("%-9s%-50s%-12s", id, v.Problem.Name, date))
-
-		solvedProblems[id] = true
+		solved[id], result = true, append(result, v)
 	}
+	return result
+}
 
-	fmt.Printf("%s solved %d problems.\n", handle, len(solvedProblems))
-	fmt.Printf("%-9s%-50s%-12s\n", "ID", "Name", "Date")
-	for _, l := range lines {
-		fmt.Println(l)
-	}
+func validateHandle(h string) bool {
+	// TODO
+	return true
 }
